@@ -24747,7 +24747,7 @@
         {
             "id": 25,
             "description": "查询同时具有拓扑性质和磁性的材料",
-            "cypher": "MATCH (f:Formula)-[:HAS_TOPO_CLASS]->(t:TopoClass) MATCH (f)-[:HAS_MAGNETIC_PROPERTY]->(m:MagneticOrdering) WHERE t.name <> 'trivial insulator' AND m.name IN ['magnetic', 'non-magnetic'] RETURN f.mp_id AS mp_id, f.name AS formula, t.name AS topo_class, m.name AS magnetic_ordering LIMIT 10",
+            "cypher": "MATCH (f:Formula)-[:HAS_TOPO_CLASS]->(t:TopoClass) MATCH (f)-[:HAS_MAGNETIC_PROPERTY]->(m:MagneticOrdering) WHERE t.name <> 'trivial insulator' AND m.name IN ['magnetic'] RETURN f.mp_id AS mp_id, f.name AS formula, t.name AS topo_class, m.name AS magnetic_ordering LIMIT 10",
             "embedding": [
                 -0.024674334,
                 0.028371768,

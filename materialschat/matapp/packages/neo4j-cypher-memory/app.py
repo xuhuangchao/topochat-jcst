@@ -98,6 +98,20 @@ def main():
     st.set_page_config(
         page_title="TopoChat", layout="wide", initial_sidebar_state="expanded"
     )
+    
+    # 更新公告示例（添加emoji）
+    st.markdown(
+        """
+        <div style="border: 1px solid #ddd; padding: 10px; margin-bottom: 15px;">
+            <h3>20250212更新公告 🎉🤖</h3>
+            <p>本次更新CypherLLM为deepseek-v3 ⚡，生成查询语句的准确性提高</p>
+            <p>QALLM保持Qwen2.5-72b-Instruct不变 🤝</p>
+            <p>大幅改动回复阶段prompt更适配拓扑材料 🔧</p>
+            <p>Format responses as: material basics → topology → evidence → applications 🧪</p>
+        </div>
+        """,
+        unsafe_allow_html=True
+    )
 
     # Initialize session state
     if "current_chat" not in st.session_state:

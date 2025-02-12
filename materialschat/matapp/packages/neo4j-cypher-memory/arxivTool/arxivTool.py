@@ -29,9 +29,26 @@ load_dotenv(".env")
 SILICONFLOW_API_KEY = os.getenv("SILICONFLOW_API_KEY")
 SILICONFLOW_API_BASE = os.getenv("SILICONFLOW_API_BASE")
 
+# 将用户提问统一翻译为英文并构建ArxivExplorer搜索URL
+def translator(user_question):
+    chat_model = ChatOpenAI(
+        model="Qwen/Qwen2.5-72B-Instruct",
+        openai_api_base=SILICONFLOW_API_BASE,
+        openai_api_key=SILICONFLOW_API_KEY,
+    )
+
+    messages = [
+        ("system", "Translate the following text to English. Only return the translation without any explanation:"),
+        ("human", f"{user_question}"),
+    ]
+
+    ai_msg = chat_model.invoke(messages)
+    return ai_msg.content
+
 # 使用ArxivExplorer获取相关文献摘要
 def fetch_arxiv_summaries_byexplorer(user_question):
-    url = f"https://arxivxplorer.com/?query={user_question}"
+    encoded_query = translator(user_question)
+    url = f"https://arxivxplorer.com/?query={encoded_query}"
 
     chrome_options = Options()
     chrome_options.add_argument("--headless")  # 启用无头模式
@@ -78,7 +95,7 @@ def fetch_arxiv_summaries_byexplorer(user_question):
         if driver is not None:
             driver.quit()
 
-
+# 调用硅基流动API获取文本嵌入向量（BGE Embedding）
 def get_embeddings(texts, model="Pro/BAAI/bge-m3", token="your-token-here"):
     url = "https://api.siliconflow.cn/v1/embeddings"
     headers = {"Authorization": f"Bearer {token}", "Content-Type": "application/json"}
@@ -87,11 +104,9 @@ def get_embeddings(texts, model="Pro/BAAI/bge-m3", token="your-token-here"):
     for text in texts:
         try:
             payload = {"model": model, "input": text, "encoding_format": "float"}
-            response = requests.post(url, json=payload, headers=headers)
-            response_json = json.loads(response.text)
-
-            data = response_json["data"][0]
-            embedding = data["embedding"]
+            response = requests.request("POST", url, json=payload, headers=headers)
+            response_json = response.json()
+            embedding = response_json["data"][0]["embedding"]
             embeddings.append(embedding)
         except Exception as e:
             print(f"Error occurred while processing text: {text}")
@@ -100,7 +115,7 @@ def get_embeddings(texts, model="Pro/BAAI/bge-m3", token="your-token-here"):
     return np.array(embeddings)
 
 
-# 聚类文献摘要
+# 使用KMeans算法聚类文献摘要向量
 def cluster_summaries(summaries, num_clusters=5):
     # 获取摘要的嵌入向量
     embeddings = get_embeddings(summaries, token=SILICONFLOW_API_KEY)
@@ -109,7 +124,7 @@ def cluster_summaries(summaries, num_clusters=5):
     return kmeans.labels_, kmeans.cluster_centers_, embeddings
 
 
-# 使用Leiden算法聚类文献摘要
+# 使用Leiden算法聚类文献摘要向量（更适合大型图）
 def cluster_summaries_leiden(summaries, resolution=1.0, threshold=0.6):
     # 获取摘要的嵌入向量
     embeddings = get_embeddings(summaries, token=SILICONFLOW_API_KEY)
@@ -208,7 +223,7 @@ def cluster_summaries_leiden(summaries, resolution=1.0, threshold=0.6):
     return labels, cluster_centers, embeddings, representative_documents
 
 
-# 打印聚类信息
+# 打印社区聚类信息
 def print_cluster_info(cluster_labels, summaries, titles):
     # 将摘要按聚类分组
     clustered_summaries = {}
@@ -231,37 +246,7 @@ def print_cluster_info(cluster_labels, summaries, titles):
         community_info += "\n"
     return community_info
 
-
-# 格式化打印聚类信息
-# def print_cluster_info_with_format(cluster_labels, summaries, titles):
-#     # 将摘要按聚类分组
-#     clustered_summaries = {}
-#     cluster_titles = {}
-#     for i, label in enumerate(cluster_labels):
-#         clustered_summaries.setdefault(label, []).append(summaries[i])
-#         cluster_titles.setdefault(label, []).append(titles[i])
-
-#     # 为每个聚类生成摘要
-#     community_summaries = {}
-#     for label, summaries in clustered_summaries.items():
-#         summary = generate_community_summaries(summaries)
-#         community_summaries[label] = summary
-
-#     # 按照 community label 排序
-#     sorted_labels = sorted(community_summaries.keys())
-
-#     community_info = ""
-#     # 打印每个聚类的摘要
-#     for label in sorted_labels:
-#         summary = community_summaries[label]
-#         community_info += f"<h4>Community {label}</h4>"
-#         community_info += f"<p>{summary}</p>"
-#         for title in cluster_titles[label]:
-#             community_info += f"<li>{title}</li>"
-#         community_info += "<br>"
-#     return community_info
-
-
+# 打印社区聚类信息（按照既定格式）
 def print_cluster_info_with_format(cluster_labels, summaries, titles):
     # 将摘要按聚类分组
     clustered_summaries = {}
@@ -308,12 +293,7 @@ def print_cluster_info_with_format(cluster_labels, summaries, titles):
     return community_info
 
 
-# 从命令行获取用户确认的类别
-def get_user_confirmed_cluster():
-    confirmed_cluster = int(input("请输入您感兴趣的聚类编号（0开始）: "))
-    return confirmed_cluster
-
-
+# 使用正则匹配的方式粗略去除参考文献和致谢部分
 def remove_references(text):
     reference_keywords = [
         "REFERENCES",
@@ -341,7 +321,7 @@ def remove_references(text):
         print("No reference section found")
         return text
 
-
+# 从文献中提取chunk段落文本
 def split_into_chunks(text, chunk_size=1000):
     sentences = nltk.sent_tokenize(text)
     chunks = []
@@ -361,7 +341,7 @@ def split_into_chunks(text, chunk_size=1000):
     return chunks
 
 
-# 将最相关的文献切分为chunks并找到最相似的chunk
+# chunk相似性检索
 def get_most_relevant_chunk(user_question, chunks, n=3):
     user_question_embedding = get_embeddings(
         [user_question], token=SILICONFLOW_API_KEY
@@ -387,7 +367,7 @@ def get_most_relevant_chunk(user_question, chunks, n=3):
     return top_n_chunks
 
 
-# 根据相关的chunk和user_question回复
+# 根据相关的chunk和user_question总结文献信息（可以改进）
 def answer_question(user_question, chunks):
     chat_model = ChatOpenAI(
         model="Qwen/Qwen2.5-72B-Instruct",
@@ -403,7 +383,7 @@ def answer_question(user_question, chunks):
     ai_msg = chat_model.invoke(messages)
     return ai_msg.content
 
-
+# 根据文献摘要总结出社区主题
 def generate_community_summaries(summaries):
     chat_model = ChatOpenAI(
         model="Qwen/Qwen2.5-72B-Instruct",
@@ -420,7 +400,7 @@ def generate_community_summaries(summaries):
     return ai_msg.content
 
 
-# 主流程
+# 测试主流程
 if __name__ == "__main__":
     start_time_1 = time.time()
     user_question = "Bi2Se3的能带结构"
@@ -439,7 +419,7 @@ if __name__ == "__main__":
     print("第一阶段耗时/s：", elaspsed_time_1)
 
     # 获取用户确认的聚类
-    confirmed_cluster = get_user_confirmed_cluster()
+    confirmed_cluster = 0
 
     start_time_2 = time.time()
 

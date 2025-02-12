@@ -13,7 +13,7 @@ from arxivTool.arxivTool import (
     answer_question,
 )
 from langchain_community.document_loaders import ArxivLoader
-from neo4j_cypher_memory.chain import chain, history_graph
+from neo4j_cypher_memory.chain_ds import chain, history_graph
 
 
 # 加载CSS
@@ -219,17 +219,23 @@ def process_selected_cluster(
     )
     pdf_text_without_references = remove_references(pdf_text)
 
-    chunks = split_into_chunks(pdf_text_without_references, chunk_size=2000)
+    chunks = split_into_chunks(pdf_text_without_references, chunk_size=2500)
     top_n_chunks = get_most_relevant_chunk(question, chunks, n=3)
 
-    # 生成最终回答
-    response = answer_question(question, top_n_chunks)
+    # 使用llm先对chunks进行处理
+    # response = answer_question(question, top_n_chunks)
+    
+    relevant_chunks = {
+        "title": most_relevant_title,
+        "chunks": top_n_chunks,
+    }
+    
     final_result = chain.invoke(
         {
             "question": question,
             "user_id": "user_123",
             "session_id": session_id,
-            "arxiv_context": response,
+            "arxiv_context": relevant_chunks,
         }
     )
 
