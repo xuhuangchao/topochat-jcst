@@ -80,6 +80,10 @@ history_graph = Neo4jGraph(
 #### Step 2: Launch Application
 ```bash
 conda env create -f environment.yml
+or 
+conda create -n topochat python=3.10
+conda activate topochat
+pip install -r requirements.txt
 
 cd materialschat/matapp/packages/neo4j-cypher-memory
 
